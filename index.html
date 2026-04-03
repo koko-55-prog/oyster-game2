@@ -409,9 +409,11 @@ function startGame() {
   };
   for (const name of names) {
     S.players.push({ name, score: 0, hand: [], fieldGout: 0 });
-    // Deal starting card (gout auto-applies)
+    const idx = S.players.length - 1;
     const card = S.specialDeck.pop();
-    if (card) dealSpecialTo(S.players.length - 1, card);
+    if (card) dealSpecialTo(idx, card);
+    // If starting card was gout (went to field), auto-draw a hand card
+    autoDrawSpecialIfNeeded(idx);
   }
   renderToast();
   showScreen('toast');
@@ -504,6 +506,8 @@ function playSpecialCard(ci) {
     p.hand.splice(ci, 1);
     S.okawariIdx = S.currentIdx;
     addLog(`🍺 ${p.name} がおかわりカードを使用！牡蠣をもう1枚引きます`);
+    // If hand is now empty, auto-draw a replacement before proceeding
+    autoDrawSpecialIfNeeded(S.currentIdx);
     // Draw oyster and go to give screen
     S.activeCard = S.oysterDeck.pop();
     S.targetIdx = null;
@@ -537,6 +541,16 @@ function drawSpecialFor(playerIdx) {
   return dealSpecialTo(playerIdx, card);
 }
 
+// If hand is empty, keep drawing until hand has a card (or deck exhausted)
+function autoDrawSpecialIfNeeded(playerIdx) {
+  const p = S.players[playerIdx];
+  while (p.hand.length === 0 && S.specialDeck.length > 0) {
+    const card = drawSpecialFor(playerIdx);
+    if (!card) break;
+    // If it was gout (went to field, not hand), loop continues automatically
+  }
+}
+
 // ===== MEDICINE MODAL =====
 function openMedicineModal() {
   const targets = document.getElementById('medicine-targets');
@@ -568,6 +582,7 @@ function useMedicine(targetPlayerIdx) {
   addLog(`💊 ${user.name} が尿酸排泄促進薬を使用！${target.name} の痛風カード1枚を無効化 → ${target.name} +30点回復（合計：${target.score}点）`);
   const drawn = drawSpecialFor(S.currentIdx);
   if (drawn) addLog(`🃏 ${user.name} がお酒カードを引きました：${drawn.label}`);
+  autoDrawSpecialIfNeeded(S.currentIdx);
   renderPlay();
 }
 
@@ -709,6 +724,7 @@ function resolveEat(useCook) {
       const ci = eater.hand.findIndex(c => c.id === 'cook_card');
       eater.hand.splice(ci, 1);
       drawnCard = drawSpecialFor(S.eatEaterIdx);
+      autoDrawSpecialIfNeeded(S.eatEaterIdx);
     } else {
       delta = -10;
       msg = `加熱調理カードなしで食べてしまいました…`;
@@ -742,6 +758,7 @@ function nextTurn() {
   if (S.okawariIdx !== null) {
     const drawn = drawSpecialFor(S.okawariIdx);
     if (drawn) addLog(`🃏 ${S.players[S.okawariIdx].name} がお酒カードを引きました：${drawn.label}`);
+    autoDrawSpecialIfNeeded(S.okawariIdx);
     S.okawariIdx = null;
   }
   if (S.oysterDeck.length === 0) {
