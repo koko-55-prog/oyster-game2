@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>譲り合い！オイスター・パニック</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+  background: linear-gradient(135deg, #0a2a4a 0%, #1a5276 50%, #0e4d6b 100%);
+  min-height: 100vh; color: #fff; font-size: 16px;
+}
+.screen { display: none; min-height: 100vh; padding: 16px; flex-direction: column; align-items: center; }
+.screen.active { display: flex; }
+h1 { font-size: 1.5rem; text-align: center; text-shadow: 0 2px 8px rgba(0,0,0,0.5); margin-bottom: 8px; }
+h2 { font-size: 1.2rem; text-align: center; margin-bottom: 12px; }
+.subtitle { font-size: 0.85rem; opacity: 0.8; text-align: center; margin-bottom: 16px; }
+
+/* Buttons */
+.btn { display: inline-block; padding: 14px 24px; border: none; border-radius: 12px;
+  font-size: 1rem; font-weight: bold; cursor: pointer; min-height: 52px;
+  transition: transform 0.1s, opacity 0.1s; width: 100%; margin: 4px 0; }
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: #27ae60; color: #fff; }
+.btn-danger { background: #e74c3c; color: #fff; }
+.btn-orange { background: #e67e22; color: #fff; }
+.btn-purple { background: #8e44ad; color: #fff; }
+.btn-teal { background: #16a085; color: #fff; }
+.btn-gray { background: rgba(255,255,255,0.2); color: #fff; }
+.btn-gold { background: #f39c12; color: #fff; }
+.btn-sm { min-height: 40px; padding: 8px 16px; font-size: 0.9rem; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-row { display: flex; gap: 8px; width: 100%; }
+.btn-row .btn { flex: 1; }
+
+/* Cards */
+.card {
+  background: #fdf6e3; color: #333; border-radius: 14px; padding: 16px 12px;
+  text-align: center; border: 3px solid #ccc; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  min-width: 110px; position: relative;
+}
+.card .card-emoji { font-size: 2.8rem; display: block; margin-bottom: 6px; }
+.card .card-label { font-size: 0.8rem; font-weight: bold; }
+.card .card-pts { font-size: 0.75rem; opacity: 0.7; margin-top: 4px; }
+.card.raw { border-color: #27ae60; background: #eafaf1; }
+.card.cook-oys { border-color: #e67e22; background: #fef9e7; }
+.card.cook-card { border-color: #f39c12; background: #fffde7; }
+.card.gout { border-color: #8e44ad; background: #f5eef8; }
+.card.medicine { border-color: #16a085; background: #e8f8f5; }
+.card.back { border-color: #c0392b; background: #fdedec; }
+.card.big { min-width: 150px; padding: 24px 16px; }
+.card.big .card-emoji { font-size: 4rem; }
+.card.big .card-label { font-size: 1rem; }
+
+/* Score bar */
+#score-bar {
+  width: 100%; background: rgba(0,0,0,0.3); border-radius: 10px;
+  padding: 8px 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px;
+}
+.score-chip {
+  background: rgba(255,255,255,0.15); border-radius: 20px; padding: 4px 10px;
+  font-size: 0.8rem; white-space: nowrap;
+}
+.score-chip.current { background: #27ae60; font-weight: bold; }
+
+/* Hand display */
+.hand { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 8px 0; }
+.hand-card { cursor: pointer; transition: transform 0.15s; }
+.hand-card:hover { transform: translateY(-4px); }
+
+/* Player select buttons */
+.player-select { display: grid; gap: 8px; width: 100%; margin: 8px 0; }
+.player-btn {
+  padding: 14px; background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
+  border-radius: 12px; color: #fff; font-size: 1rem; cursor: pointer;
+  text-align: left; transition: all 0.15s;
+}
+.player-btn:hover { background: rgba(255,255,255,0.25); }
+.player-btn.selected { background: #27ae60; border-color: #27ae60; }
+
+/* Pitch input */
+.pitch-input {
+  width: 100%; padding: 12px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.1); color: #fff; font-size: 1rem; margin: 8px 0;
+}
+.pitch-input::placeholder { color: rgba(255,255,255,0.5); }
+
+/* Log */
+.log-box {
+  width: 100%; background: rgba(0,0,0,0.25); border-radius: 10px;
+  padding: 10px 12px; font-size: 0.8rem; max-height: 100px; overflow-y: auto;
+  margin-top: 8px;
+}
+.log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+
+/* Result */
+.result-row {
+  width: 100%; background: rgba(255,255,255,0.1); border-radius: 12px;
+  padding: 14px 16px; margin: 6px 0; display: flex; align-items: center; gap: 12px;
+}
+.result-row.winner { background: rgba(255,215,0,0.25); border: 2px solid gold; }
+.result-rank { font-size: 1.5rem; min-width: 40px; text-align: center; }
+.result-name { flex: 1; font-size: 1.1rem; font-weight: bold; }
+.result-score { font-size: 1.3rem; font-weight: bold; }
+
+/* Score popup animation */
+@keyframes scoreFloat {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-60px) scale(1.3); }
+}
+.score-pop {
+  position: fixed; font-size: 2rem; font-weight: bold; pointer-events: none;
+  animation: scoreFloat 1.2s ease-out forwards; z-index: 999;
+}
+.score-pop.plus { color: #2ecc71; }
+.score-pop.minus { color: #e74c3c; }
+
+/* Toast cards row */
+.toast-cards { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 12px 0; }
+
+/* Deck count badge */
+.deck-badge {
+  display: inline-block; background: rgba(255,255,255,0.2); border-radius: 20px;
+  padding: 4px 12px; font-size: 0.85rem; margin: 4px 0;
+}
+
+/* Section separator */
+.sep { width: 100%; height: 1px; background: rgba(255,255,255,0.2); margin: 12px 0; }
+
+/* Special card action section */
+.special-section {
+  width: 100%; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 12px; margin: 8px 0;
+}
+.special-section h3 { font-size: 0.9rem; opacity: 0.8; margin-bottom: 8px; }
+
+/* Scrollable area */
+.scroll-area { width: 100%; overflow-y: auto; flex: 1; }
+
+/* Centered content */
+.center { text-align: center; width: 100%; }
+.mt8 { margin-top: 8px; }
+.mt16 { margin-top: 16px; }
+
+/* Big score delta */
+.delta-display {
+  font-size: 3rem; font-weight: bold; text-align: center; margin: 16px 0;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+.delta-plus { color: #2ecc71; }
+.delta-minus { color: #e74c3c; }
+
+/* Toast button */
+.kanpai-btn {
+  font-size: 1.4rem; padding: 20px; background: linear-gradient(135deg, #f39c12, #e74c3c);
+  border-radius: 16px; width: 100%; border: none; color: #fff; font-weight: bold;
+  cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.3); margin: 12px 0;
+}
+
+/* Pitch display box */
+.pitch-box {
+  background: rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 14px;
+  font-style: italic; margin: 8px 0; font-size: 0.95rem;
+  border-left: 3px solid rgba(255,255,255,0.4);
+}
+
+/* Who passes reminder */
+.pass-reminder {
+  background: rgba(0,0,0,0.3); border-radius: 10px; padding: 10px;
+  font-size: 0.85rem; text-align: center; margin-bottom: 12px; opacity: 0.9;
+}
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="screen-setup" class="screen active">
+  <h1>🦪 譲り合い！</h1>
+  <h2>オイスター・パニック</h2>
+  <p class="subtitle">牡蠣を食べ比べる大宴会カードゲーム</p>
+  <div style="width:100%;max-width:400px">
+    <p style="margin-bottom:8px;font-size:0.95rem">プレイヤー人数：</p>
+    <div class="btn-row" id="count-btns"></div>
+    <div class="sep"></div>
+    <div id="name-inputs"></div>
+    <button class="btn btn-primary mt16" id="btn-start" onclick="startGame()">🎮 ゲームスタート！</button>
+  </div>
+</div>
+
+<!-- TOAST SCREEN -->
+<div id="screen-toast" class="screen">
+  <h1>🥂 乾杯の準備！</h1>
+  <p class="subtitle">各プレイヤーがお酒カードを1枚引きました</p>
+  <div class="toast-cards" id="toast-cards"></div>
+  <p class="subtitle mt8">ゲーム開始前に全員で乾杯！</p>
+  <button class="kanpai-btn" onclick="doKanpai()">🥂 乾杯！</button>
+</div>
+
+<!-- PLAY SCREEN -->
+<div id="screen-play" class="screen">
+  <div id="score-bar"></div>
+  <h2 id="play-heading"></h2>
+  <span class="deck-badge" id="play-deck-count"></span>
+  <div class="special-section" id="play-special-section">
+    <h3>🃏 手持ちの特殊カード</h3>
+    <div class="hand" id="play-hand"></div>
+  </div>
+  <div class="sep"></div>
+  <button class="btn btn-orange mt8" id="btn-draw" onclick="drawOyster()">🦪 牡蠣を引く</button>
+  <div class="log-box" id="play-log"></div>
+</div>
+
+<!-- GIVE SCREEN -->
+<div id="screen-give" class="screen">
+  <div id="score-bar2"></div>
+  <h2>誰に譲りますか？</h2>
+  <div style="margin:12px 0" id="give-card-display"></div>
+  <div class="player-select" id="give-player-btns"></div>
+  <input type="text" class="pitch-input" id="pitch-input" maxlength="60" placeholder="一言どうぞ…（任意）">
+  <button class="btn btn-primary mt8" id="btn-give" onclick="confirmGive()" disabled>🤝 譲る！</button>
+  <button class="btn btn-gray mt8" onclick="cancelGive()">← 戻る</button>
+</div>
+
+<!-- RESPOND SCREEN -->
+<div id="screen-respond" class="screen">
+  <div class="pass-reminder" id="respond-reminder"></div>
+  <h2 id="respond-heading"></h2>
+  <div id="respond-pitch"></div>
+  <div style="margin:16px 0" id="respond-card-display"></div>
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="respondAccept()">🙏 いただきます！</button>
+    <button class="btn btn-danger" onclick="respondRefuse()">🙅 いえいえ<br>あなたこそ！</button>
+  </div>
+  <p style="font-size:0.75rem;opacity:0.6;text-align:center;margin-top:8px" id="respond-hint"></p>
+</div>
+
+<!-- EAT SCREEN -->
+<div id="screen-eat" class="screen">
+  <h2 id="eat-heading"></h2>
+  <div style="margin:12px 0" id="eat-card-display"></div>
+  <div id="eat-cook-choice" style="display:none">
+    <p class="subtitle">加熱調理カードを持っています！</p>
+    <div class="btn-row">
+      <button class="btn btn-gold" onclick="eatWithCook()">🍳 使う<br><small>+30点</small></button>
+      <button class="btn btn-gray" onclick="eatWithoutCook()">❌ 使わない<br><small>-10点</small></button>
+    </div>
+  </div>
+  <div id="eat-result" style="display:none">
+    <div class="delta-display" id="eat-delta"></div>
+    <p class="center" id="eat-result-msg"></p>
+    <div class="sep"></div>
+    <div id="eat-draw-special" style="display:none">
+      <p class="subtitle">🃏 お酒カードを1枚引きました！</p>
+      <div id="eat-drawn-card" style="display:flex;justify-content:center;margin:8px 0"></div>
+    </div>
+    <button class="btn btn-primary mt16" onclick="nextTurn()">次のターンへ →</button>
+  </div>
+</div>
+
+<!-- RESULT SCREEN -->
+<div id="screen-result" class="screen">
+  <h1 style="font-size:2rem;margin-bottom:4px">🦪 ゲーム終了！</h1>
+  <p class="subtitle">最終スコア</p>
+  <div id="result-list" style="width:100%"></div>
+  <div class="sep"></div>
+  <div class="log-box" id="result-log" style="max-height:200px"></div>
+  <button class="btn btn-primary mt16" onclick="resetGame()">🔄 もう一度遊ぶ</button>
+</div>
+
+<script>
+// ===== CONSTANTS =====
+const CT = {
+  RAW:      { id:'raw',      label:'生食用牡蠣',     emoji:'🦪',  cls:'raw',       pts:+10 },
+  COOK_OYS: { id:'cook_oys', label:'加熱用牡蠣',     emoji:'🔥',  cls:'cook-oys',  pts:-10 },
+  COOK_CARD:{ id:'cook_card',label:'加熱調理カード',  emoji:'🍳',  cls:'cook-card', pts:0 },
+  GOUT:     { id:'gout',     label:'痛風カード',      emoji:'🦶',  cls:'gout',      pts:-30 },
+  MEDICINE: { id:'medicine', label:'尿酸排泄促進薬',  emoji:'💊',  cls:'medicine',  pts:0 }
+};
+
+// ===== STATE =====
+let S = {
+  phase: 'setup',
+  players: [],
+  currentIdx: 0,
+  targetIdx: null,
+  oysterDeck: [],
+  specialDeck: [],
+  activeCard: null,
+  salesPitch: '',
+  gameLog: [],
+  pendingSpecialDraw: null,  // playerIdx who should draw
+  eatEaterIdx: null,
+  playerCount: 3
+};
+
+// ===== DECK CREATION =====
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function createDecks() {
+  const oyster = [];
+  for (let i = 0; i < 7; i++) oyster.push({ ...CT.RAW, uid: 'raw' + i });
+  for (let i = 0; i < 8; i++) oyster.push({ ...CT.COOK_OYS, uid: 'coys' + i });
+
+  const special = [];
+  for (let i = 0; i < 4; i++) special.push({ ...CT.COOK_CARD, uid: 'cc' + i });
+  for (let i = 0; i < 3; i++) special.push({ ...CT.GOUT, uid: 'gout' + i });
+  special.push({ ...CT.MEDICINE, uid: 'med0' });
+
+  return { oyster: shuffle(oyster), special: shuffle(special) };
+}
+
+// ===== CARD HTML =====
+function cardHtml(card, big = false) {
+  let ptsText = '';
+  if (card.id === 'raw') ptsText = '+10点';
+  else if (card.id === 'cook_oys') ptsText = '加熱調理カード使用で+30点 / なければ-10点';
+  else if (card.id === 'gout') ptsText = '-30点 または 場に出す→特殊カード引く';
+  else if (card.id === 'cook_card') ptsText = '加熱用牡蠣を食べる時+30点に';
+  else if (card.id === 'medicine') ptsText = '痛風カード1枚無効化';
+  return `<div class="card ${card.cls}${big?' big':''}">
+    <span class="card-emoji">${card.emoji}</span>
+    <span class="card-label">${card.label}</span>
+    ${ptsText ? `<span class="card-pts">${ptsText}</span>` : ''}
+  </div>`;
+}
+
+function backCardHtml() {
+  return `<div class="card back"><span class="card-emoji">🍶</span><span class="card-label">お酒カード</span></div>`;
+}
+
+// ===== INIT =====
+function initSetup() {
+  // Player count buttons
+  const cb = document.getElementById('count-btns');
+  cb.innerHTML = '';
+  for (let n = 2; n <= 6; n++) {
+    const b = document.createElement('button');
+    b.className = 'btn btn-gray btn-sm' + (n === S.playerCount ? ' btn-primary' : '');
+    b.textContent = n + '人';
+    b.onclick = () => { S.playerCount = n; initSetup(); };
+    cb.appendChild(b);
+  }
+  // Name inputs
+  const ni = document.getElementById('name-inputs');
+  const prev = Array.from(ni.querySelectorAll('input')).map(i => i.value);
+  ni.innerHTML = '';
+  for (let i = 0; i < S.playerCount; i++) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;margin:6px 0;';
+    const lbl = document.createElement('span');
+    lbl.textContent = (i+1) + '人目：';
+    lbl.style.minWidth = '55px';
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'pitch-input';
+    inp.style.margin = '0';
+    inp.value = prev[i] || ('プレイヤー' + (i+1));
+    inp.maxLength = 10;
+    wrap.appendChild(lbl);
+    wrap.appendChild(inp);
+    ni.appendChild(wrap);
+  }
+}
+
+function startGame() {
+  const inputs = document.querySelectorAll('#name-inputs input');
+  const names = Array.from(inputs).map(i => i.value.trim() || ('プレイヤー' + (Array.from(inputs).indexOf(i)+1)));
+  const { oyster, special } = createDecks();
+  S = {
+    phase: 'toast', players: [], currentIdx: 0, targetIdx: null,
+    oysterDeck: oyster, specialDeck: special, activeCard: null,
+    salesPitch: '', gameLog: [], pendingSpecialDraw: null,
+    eatEaterIdx: null, playerCount: names.length
+  };
+  for (const name of names) {
+    const card = S.specialDeck.pop();
+    S.players.push({ name, score: 0, hand: card ? [card] : [] });
+  }
+  renderToast();
+  showScreen('toast');
+}
+
+// ===== TOAST =====
+function renderToast() {
+  const tc = document.getElementById('toast-cards');
+  tc.innerHTML = S.players.map(p =>
+    `<div style="text-align:center">
+      <div style="font-size:0.8rem;margin-bottom:4px">${p.name}</div>
+      ${p.hand.length ? cardHtml(p.hand[0]) : backCardHtml()}
+    </div>`
+  ).join('');
+}
+
+function doKanpai() {
+  addLog('🥂 乾杯！ゲーム開始！');
+  renderPlay();
+  showScreen('play');
+}
+
+// ===== SCORE BAR =====
+function scoreBarHtml(targetId) {
+  return S.players.map((p, i) =>
+    `<span class="score-chip${i === S.currentIdx ? ' current' : ''}">${p.name}：${p.score}点</span>`
+  ).join('');
+}
+
+// ===== PLAY PHASE =====
+function renderPlay() {
+  const p = S.players[S.currentIdx];
+  document.getElementById('score-bar').innerHTML = scoreBarHtml();
+  document.getElementById('play-heading').textContent = `👤 ${p.name} のターン`;
+  document.getElementById('play-deck-count').textContent = `🦪 牡蠣山札 残り ${S.oysterDeck.length} 枚`;
+
+  // Hand
+  const hand = document.getElementById('play-hand');
+  if (p.hand.length === 0) {
+    hand.innerHTML = '<span style="opacity:0.5;font-size:0.85rem">手持ちカードなし</span>';
+  } else {
+    hand.innerHTML = p.hand.map((card, ci) => {
+      let canUse = (card.id === 'gout' || card.id === 'medicine');
+      let btnLabel = canUse ? '使う' : '（牡蠣を引いてから）';
+      return `<div style="text-align:center">
+        ${cardHtml(card)}
+        <button class="btn btn-sm ${canUse ? 'btn-purple' : 'btn-gray'} mt8"
+          style="width:100%"
+          ${canUse ? `onclick="playSpecialCard(${ci})"` : 'disabled'}
+        >${btnLabel}</button>
+      </div>`;
+    }).join('');
+  }
+
+  // Log
+  const logEl = document.getElementById('play-log');
+  logEl.innerHTML = S.gameLog.slice(-8).map(l => `<div class="log-entry">${l}</div>`).join('');
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function playSpecialCard(ci) {
+  const p = S.players[S.currentIdx];
+  const card = p.hand[ci];
+  if (card.id === 'gout') {
+    p.hand.splice(ci, 1);
+    p.score += -30;
+    addLog(`💢 ${p.name} が痛風カードを使用！ -30点（現在：${p.score}点）`);
+    const drawn = drawSpecialFor(S.currentIdx);
+    if (drawn) addLog(`🃏 ${p.name} がお酒カードを引きました：${drawn.label}`);
+    renderPlay();
+  } else if (card.id === 'medicine') {
+    const goutIdx = p.hand.findIndex(c => c.id === 'gout');
+    if (goutIdx === -1) {
+      alert('手元に痛風カードがありません！');
+      return;
+    }
+    p.hand.splice(ci, 1);
+    p.hand.splice(goutIdx > ci ? goutIdx - 1 : goutIdx, 1);
+    addLog(`💊 ${p.name} が尿酸排泄促進薬を使用！痛風カード1枚を無効化！`);
+    const drawn = drawSpecialFor(S.currentIdx);
+    if (drawn) addLog(`🃏 ${p.name} がお酒カードを引きました：${drawn.label}`);
+    renderPlay();
+  }
+}
+
+function drawSpecialFor(playerIdx) {
+  if (S.specialDeck.length === 0) return null;
+  const card = S.specialDeck.pop();
+  S.players[playerIdx].hand.push(card);
+  return card;
+}
+
+function drawOyster() {
+  if (S.oysterDeck.length === 0) {
+    endGame();
+    return;
+  }
+  S.activeCard = S.oysterDeck.pop();
+  addLog(`🦪 ${S.players[S.currentIdx].name} が牡蠣を引きました`);
+  renderGive();
+  showScreen('give');
+}
+
+// ===== GIVE PHASE =====
+function renderGive() {
+  document.getElementById('score-bar2').innerHTML = scoreBarHtml();
+  document.getElementById('give-card-display').innerHTML = cardHtml(S.activeCard, true);
+
+  const btns = document.getElementById('give-player-btns');
+  btns.innerHTML = '';
+  S.players.forEach((p, i) => {
+    if (i === S.currentIdx) return;
+    const b = document.createElement('button');
+    b.className = 'player-btn' + (S.targetIdx === i ? ' selected' : '');
+    b.innerHTML = `${p.name} <span style="float:right;opacity:0.7">${p.score}点</span>`;
+    b.onclick = () => { S.targetIdx = i; renderGive(); };
+    btns.appendChild(b);
+  });
+
+  document.getElementById('pitch-input').value = S.salesPitch;
+  document.getElementById('btn-give').disabled = (S.targetIdx === null);
+}
+
+function cancelGive() {
+  if (S.activeCard) {
+    S.oysterDeck.push(S.activeCard);
+    S.activeCard = null;
+  }
+  S.targetIdx = null;
+  renderPlay();
+  showScreen('play');
+}
+
+function confirmGive() {
+  S.salesPitch = document.getElementById('pitch-input').value.trim();
+  renderRespond();
+  showScreen('respond');
+}
+
+// ===== RESPOND PHASE =====
+function renderRespond() {
+  const giver = S.players[S.currentIdx];
+  const target = S.players[S.targetIdx];
+  document.getElementById('respond-reminder').textContent =
+    `📱 ${target.name} さんに端末を渡してください`;
+  document.getElementById('respond-heading').textContent =
+    `${giver.name} から牡蠣が届きました！`;
+
+  const pitchEl = document.getElementById('respond-pitch');
+  pitchEl.innerHTML = S.salesPitch
+    ? `<div class="pitch-box">「${S.salesPitch}」</div>`
+    : '';
+
+  document.getElementById('respond-card-display').innerHTML = cardHtml(S.activeCard, true);
+
+  // Hint for cooking oyster
+  const hint = document.getElementById('respond-hint');
+  if (S.activeCard.id === 'cook_oys') {
+    const hasCook = target.hand.some(c => c.id === 'cook_card');
+    hint.textContent = hasCook
+      ? '加熱調理カードを持っています！受け取れば+30点のチャンス。'
+      : '⚠ 加熱調理カードがないと-10点になります。';
+  } else {
+    hint.textContent = '生食用牡蠣：食べると+10点！';
+  }
+}
+
+function respondAccept() {
+  S.eatEaterIdx = S.targetIdx;
+  addLog(`✅ ${S.players[S.targetIdx].name} が受け取りました`);
+  renderEat();
+  showScreen('eat');
+}
+
+function respondRefuse() {
+  S.eatEaterIdx = S.currentIdx;
+  addLog(`🔄 ${S.players[S.targetIdx].name} が断りました → ${S.players[S.currentIdx].name} が食べます`);
+  renderEat();
+  showScreen('eat');
+}
+
+// ===== EAT PHASE =====
+function renderEat() {
+  const eater = S.players[S.eatEaterIdx];
+  const card = S.activeCard;
+  document.getElementById('eat-heading').textContent = `${eater.name} が食べます！`;
+  document.getElementById('eat-card-display').innerHTML = cardHtml(card, true);
+
+  const choiceDiv = document.getElementById('eat-cook-choice');
+  const resultDiv = document.getElementById('eat-result');
+  resultDiv.style.display = 'none';
+
+  if (card.id === 'cook_oys') {
+    const hasCook = eater.hand.some(c => c.id === 'cook_card');
+    if (hasCook) {
+      choiceDiv.style.display = 'block';
+      return;
+    }
+  }
+  choiceDiv.style.display = 'none';
+  resolveEat(false);
+}
+
+function eatWithCook() {
+  document.getElementById('eat-cook-choice').style.display = 'none';
+  resolveEat(true);
+}
+
+function eatWithoutCook() {
+  document.getElementById('eat-cook-choice').style.display = 'none';
+  resolveEat(false);
+}
+
+function resolveEat(useCook) {
+  const eater = S.players[S.eatEaterIdx];
+  const card = S.activeCard;
+  let delta = 0;
+  let msg = '';
+  let drawnCard = null;
+
+  if (card.id === 'raw') {
+    delta = 10;
+    msg = `生食用牡蠣を食べました！`;
+  } else if (card.id === 'cook_oys') {
+    if (useCook) {
+      delta = 30;
+      msg = `加熱調理カードを使って安全に食べました！`;
+      const ci = eater.hand.findIndex(c => c.id === 'cook_card');
+      eater.hand.splice(ci, 1);
+      drawnCard = drawSpecialFor(S.eatEaterIdx);
+    } else {
+      delta = -10;
+      msg = `加熱調理カードなしで食べてしまいました…`;
+    }
+  }
+
+  eater.score += delta;
+  addLog(`${delta >= 0 ? '✅' : '❌'} ${eater.name} ${delta >= 0 ? '+' : ''}${delta}点 (${msg}) → 合計：${eater.score}点`);
+
+  // Show result
+  const deltaEl = document.getElementById('eat-delta');
+  deltaEl.textContent = (delta >= 0 ? '+' : '') + delta + '点';
+  deltaEl.className = 'delta-display ' + (delta >= 0 ? 'delta-plus' : 'delta-minus');
+  document.getElementById('eat-result-msg').textContent = msg;
+
+  const drawDiv = document.getElementById('eat-draw-special');
+  const drawnCardDiv = document.getElementById('eat-drawn-card');
+  if (drawnCard) {
+    drawDiv.style.display = 'block';
+    drawnCardDiv.innerHTML = cardHtml(drawnCard);
+  } else {
+    drawDiv.style.display = 'none';
+  }
+
+  document.getElementById('eat-result').style.display = 'block';
+  S.activeCard = null;
+}
+
+function nextTurn() {
+  if (S.oysterDeck.length === 0) {
+    endGame();
+    return;
+  }
+  S.currentIdx = (S.currentIdx + 1) % S.players.length;
+  S.targetIdx = null;
+  S.salesPitch = '';
+  S.eatEaterIdx = null;
+  renderPlay();
+  showScreen('play');
+}
+
+// ===== END GAME =====
+function endGame() {
+  addLog('--- ゲーム終了！最終精算 ---');
+  // Apply gout penalties
+  for (const p of S.players) {
+    const goutCount = p.hand.filter(c => c.id === 'gout').length;
+    if (goutCount > 0) {
+      const penalty = goutCount * -30;
+      p.score += penalty;
+      addLog(`🦶 ${p.name} 痛風カード${goutCount}枚 → ${penalty}点（合計：${p.score}点）`);
+    }
+  }
+  renderResult();
+  showScreen('result');
+}
+
+// ===== RESULT SCREEN =====
+function renderResult() {
+  const sorted = [...S.players].sort((a, b) => b.score - a.score);
+  const maxScore = sorted[0].score;
+  const list = document.getElementById('result-list');
+
+  list.innerHTML = sorted.map((p, rank) => {
+    const isWinner = p.score === maxScore;
+    const rankEmoji = rank === 0 ? '👑' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : `${rank+1}位`;
+    return `<div class="result-row${isWinner ? ' winner' : ''}">
+      <span class="result-rank">${rankEmoji}</span>
+      <span class="result-name">${p.name}</span>
+      <span class="result-score" style="color:${p.score >= 0 ? '#2ecc71' : '#e74c3c'}">${p.score}点</span>
+    </div>`;
+  }).join('');
+
+  const logEl = document.getElementById('result-log');
+  logEl.innerHTML = S.gameLog.map(l => `<div class="log-entry">${l}</div>`).join('');
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ===== UTILS =====
+function addLog(msg) {
+  const now = new Date();
+  const time = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+  S.gameLog.push(`[${time}] ${msg}`);
+}
+
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+}
+
+function resetGame() {
+  S = { phase:'setup', players:[], currentIdx:0, targetIdx:null,
+    oysterDeck:[], specialDeck:[], activeCard:null, salesPitch:'',
+    gameLog:[], pendingSpecialDraw:null, eatEaterIdx:null, playerCount:3 };
+  showScreen('setup');
+  initSetup();
+}
+
+// ===== BOOT =====
+window.onload = () => {
+  initSetup();
+  showScreen('setup');
+};
+</script>
+</body>
+</html>
