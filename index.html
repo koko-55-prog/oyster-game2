@@ -248,6 +248,7 @@ h2 { font-size: 1.2rem; text-align: center; margin-bottom: 12px; }
   </div>
   <div class="sep"></div>
   <button class="btn btn-orange mt8" id="btn-draw" onclick="drawOyster()">🦪 牡蠣を引く</button>
+  <button class="btn btn-purple btn-sm mt8" onclick="goutAppeal()">🦶 痛風アピール（薬求む！）</button>
   <div class="log-box" id="play-log"></div>
 </div>
 
@@ -282,6 +283,13 @@ h2 { font-size: 1.2rem; text-align: center; margin-bottom: 12px; }
       🔪 オイスターナイフを使う（正体を暴く）
     </button>
   </div>
+  <!-- Target player's own hand (for informed decision) -->
+  <details style="width:100%;margin:8px 0">
+    <summary style="background:rgba(0,0,0,0.25);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:0.85rem;list-style:none;display:flex;align-items:center;gap:6px">
+      🃏 自分の手元を確認する <span style="opacity:0.6;font-size:0.75rem">（他の人には見せないで）</span>
+    </summary>
+    <div id="respond-hand-display" style="background:rgba(0,0,0,0.15);border-radius:0 0 8px 8px;padding:10px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center"></div>
+  </details>
   <div id="respond-btns" class="btn-row" style="margin-top:12px">
     <button class="btn btn-primary" onclick="respondAccept()">🙏 いただきます！</button>
     <button class="btn btn-danger" id="btn-refuse" onclick="respondRefuse()">🙅 いえいえ<br>あなたこそ！</button>
@@ -691,6 +699,16 @@ function renderRespond() {
   const refuseBtn = document.getElementById('btn-refuse');
   refuseBtn.style.display = S.forcedAccept ? 'none' : 'block';
 
+  // Target's own hand display (for informed decision-making)
+  const handDisplay = document.getElementById('respond-hand-display');
+  if (handDisplay) {
+    if (target.hand.length === 0) {
+      handDisplay.innerHTML = '<span style="opacity:0.5;font-size:0.85rem">手元にカードなし</span>';
+    } else {
+      handDisplay.innerHTML = target.hand.map(c => cardHtml(c)).join('');
+    }
+  }
+
   // Hint
   const hint = document.getElementById('respond-hint');
   if (S.forcedAccept) {
@@ -836,6 +854,19 @@ function renderResult() {
   const logEl = document.getElementById('result-log');
   logEl.innerHTML = S.gameLog.map(l=>`<div class="log-entry">${l}</div>`).join('');
   logEl.scrollTop = logEl.scrollHeight;
+}
+
+// ===== GOUT APPEAL =====
+function goutAppeal() {
+  const p = S.players[S.currentIdx];
+  const msgs = [
+    `「痛風かもしれません…💊 薬を持っている方、ぜひお願いします！」`,
+    `「最近、足が痛くて…誰か薬を譲ってもらえませんか？🙏」`,
+    `「痛風つらい！薬持ってる人いませんか〜？」`,
+  ];
+  const msg = msgs[Math.floor(Math.random() * msgs.length)];
+  addLog(`🦶 ${p.name}：${msg}`);
+  renderPlay();
 }
 
 // ===== UTILS =====
