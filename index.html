@@ -202,8 +202,12 @@ h2 { font-size: 1.2rem; text-align: center; margin-bottom: 12px; }
 <!-- MEDICINE MODAL -->
 <div class="modal-overlay" id="modal-medicine">
   <div class="modal-box">
-    <h2 style="margin-bottom:8px">💊 誰の痛風を無効化？</h2>
-    <p class="subtitle" style="margin-bottom:12px">相手が痛風を持っていると信じて使います</p>
+    <h2 style="margin-bottom:8px">💊 尿酸排泄促進薬を使う</h2>
+    <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;font-size:0.8rem;margin-bottom:12px;line-height:1.6">
+      <div>👤 <b>自分に使う</b>：自分の痛風1枚を解除（点数なし）</div>
+      <div>🤝 <b>他人に使う</b>：相手の痛風1枚を解除 ＋ 自分に <b style="color:#f1c40f">+30点（徳ポイント）</b></div>
+      <div style="color:#f1948a">⚠ 相手が痛風を持っていなければ無駄打ち（詐欺注意！）</div>
+    </div>
     <div id="medicine-targets"></div>
     <button class="btn btn-gray btn-sm mt8" onclick="closeMedicineModal()">キャンセル</button>
   </div>
@@ -357,7 +361,6 @@ let S = {
   forcedAccept: false,   // 無理強い was played on current give
   usedMuriji: false,     // toggle in give phase UI
   knifeRevealed: false,  // knife was used this respond
-  drewThisTurn: false,   // already replenished this turn
   playerCount: 3
 };
 
@@ -457,7 +460,7 @@ function startGame() {
     oysterDeck:oyster, specialDeck:special, activeCard:null,
     salesPitch:'', gameLog:[], eatEaterIdx:null,
     forcedAccept:false, usedMuriji:false, knifeRevealed:false,
-    drewThisTurn:false, playerCount:names.length
+    playerCount:names.length
   };
   for (const name of names) {
     S.players.push({ name, score:0, hand:[] });
@@ -529,10 +532,9 @@ function renderPlay() {
     }).join('');
   }
 
-  // Replenish button (once per turn, hand < 2, deck not empty)
+  // Replenish button: available whenever hand < 2 (no per-turn limit)
   const repBtn = document.getElementById('btn-replenish');
-  const canReplenish = p.hand.length < 2 && S.specialDeck.length > 0 && !S.drewThisTurn;
-  repBtn.style.display = canReplenish ? 'block' : 'none';
+  repBtn.style.display = (p.hand.length < 2 && S.specialDeck.length > 0) ? 'block' : 'none';
 
   // Log
   const logEl = document.getElementById('play-log');
@@ -541,13 +543,10 @@ function renderPlay() {
 }
 
 function replenishCard() {
-  if (S.drewThisTurn) return;
   const p = S.players[S.currentIdx];
   if (p.hand.length >= 2 || S.specialDeck.length === 0) return;
-  const card = S.specialDeck.pop();
-  p.hand.push(card);
-  S.drewThisTurn = true;
-  addLog(`🃏 ${p.name} がお酒カードを1枚補充しました`);
+  p.hand.push(S.specialDeck.pop());
+  addLog(`🃏 ${p.name} がお酒カードを補充しました`);
   renderPlay();
 }
 
@@ -564,7 +563,10 @@ function openMedicineModal() {
     const b = document.createElement('button');
     b.className = 'btn btn-teal';
     b.style.marginBottom = '8px';
-    b.innerHTML = `${p.name} の痛風を無効化（本当に持っていると信じて…）`;
+    const isSelf = (i === S.currentIdx);
+    b.innerHTML = isSelf
+      ? `👤 自分（${p.name}）の痛風を解除`
+      : `🤝 ${p.name} の痛風を解除 → 自分に <b>+30点</b>`;
     b.onclick = () => useMedicine(i);
     targets.appendChild(b);
   });
@@ -579,23 +581,30 @@ function useMedicine(targetIdx) {
   closeMedicineModal();
   const user = S.players[S.currentIdx];
   const target = S.players[targetIdx];
-  const ci = S._medicineCardIdx;
-  user.hand.splice(ci, 1);
+  const isSelf = (targetIdx === S.currentIdx);
+  user.hand.splice(S._medicineCardIdx, 1);
 
-  const goutInHand = target.hand.findIndex(c => c.id === 'gout');
-  if (goutInHand !== -1) {
-    target.hand.splice(goutInHand, 1);
-    target.score += 30;
-    addLog(`💊 ${user.name} が尿酸排泄促進薬を使用！${target.name} の痛風1枚を無効化 → +30点回復（合計：${target.score}点）`);
+  const goutIdx = target.hand.findIndex(c => c.id === 'gout');
+  if (goutIdx !== -1) {
+    target.hand.splice(goutIdx, 1);
+    if (isSelf) {
+      addLog(`💊 ${user.name} が自分に尿酸排泄促進薬を使用！自分の痛風1枚を解除（点数変動なし）`);
+    } else {
+      user.score += 30;
+      addLog(`💊 ${user.name} が尿酸排泄促進薬を使用！${target.name} の痛風1枚を解除 → ${user.name} に +30点（徳ポイント）（合計：${user.score}点）`);
+    }
   } else {
-    addLog(`💊 ${user.name} が尿酸排泄促進薬を使用 → ${target.name} には痛風カードがなかった！効果なし`);
+    if (isSelf) {
+      addLog(`💊 ${user.name} が自分に薬を使ったが…そもそも痛風カードがなかった！効果なし`);
+    } else {
+      addLog(`💊 ${user.name} が ${target.name} に薬を使ったが…痛風カードがなかった！😱 痛風詐欺！効果なし・徳ポイントなし`);
+    }
   }
 
   // Draw replacement if under 2
   if (user.hand.length < 2 && S.specialDeck.length > 0) {
     user.hand.push(S.specialDeck.pop());
-    addLog(`🃏 ${user.name} がお酒カードを1枚補充しました`);
-    S.drewThisTurn = true;
+    addLog(`🃏 ${user.name} がお酒カードを補充しました`);
   }
   renderPlay();
 }
@@ -664,8 +673,7 @@ function confirmGive() {
       // Draw replacement
       if (p.hand.length < 2 && S.specialDeck.length > 0) {
         p.hand.push(S.specialDeck.pop());
-        addLog(`🃏 ${p.name} がお酒カードを1枚補充しました`);
-        S.drewThisTurn = true;
+        addLog(`🃏 ${p.name} がお酒カードを補充しました`);
       }
     }
   }
@@ -819,7 +827,6 @@ function nextTurn() {
   S.currentIdx = (S.currentIdx + 1) % S.players.length;
   S.targetIdx = null; S.salesPitch = ''; S.eatEaterIdx = null;
   S.forcedAccept = false; S.usedMuriji = false; S.knifeRevealed = false;
-  S.drewThisTurn = false;
   renderPlay(); showScreen('play');
 }
 
@@ -885,7 +892,7 @@ function resetGame() {
   S = { phase:'setup', players:[], currentIdx:0, targetIdx:null,
     oysterDeck:[], specialDeck:[], activeCard:null, salesPitch:'',
     gameLog:[], eatEaterIdx:null, forcedAccept:false, usedMuriji:false,
-    knifeRevealed:false, drewThisTurn:false, playerCount:3 };
+    knifeRevealed:false, playerCount:3 };
   showScreen('setup'); initSetup();
 }
 
