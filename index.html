@@ -204,12 +204,21 @@ h2 { font-size: 1.2rem; text-align: center; margin-bottom: 12px; }
   <div class="modal-box">
     <h2 style="margin-bottom:8px">💊 尿酸排泄促進薬を使う</h2>
     <div style="background:rgba(0,0,0,0.2);border-radius:8px;padding:8px 10px;font-size:0.8rem;margin-bottom:12px;line-height:1.6">
-      <div>👤 <b>自分に使う</b>：自分の痛風1枚を解除（点数なし）</div>
-      <div>🤝 <b>他人に使う</b>：相手の痛風1枚を解除 ＋ 自分に <b style="color:#f1c40f">+30点（徳ポイント）</b></div>
-      <div style="color:#f1948a">⚠ 相手が痛風を持っていなければ無駄打ち（詐欺注意！）</div>
+      <div>👤 <b>自分に使う</b>：自分の痛風1枚を解除</div>
+      <div>🤝 <b>他人に使う</b>：相手の痛風1枚を解除 ＋ お礼に牡蠣山札の上から<b style="color:#f1c40f">3枚公開して1枚食べられる！</b></div>
+      <div style="color:#f1948a">⚠ 対象者が痛風でない場合は効果なし</div>
     </div>
     <div id="medicine-targets"></div>
     <button class="btn btn-gray btn-sm mt8" onclick="closeMedicineModal()">キャンセル</button>
+  </div>
+</div>
+
+<!-- MEDICINE BONUS MODAL -->
+<div class="modal-overlay" id="modal-medicine-bonus">
+  <div class="modal-box">
+    <h2 style="margin-bottom:8px">🦪 お礼の牡蠣を選んでください</h2>
+    <p style="font-size:0.85rem;opacity:0.8;margin-bottom:12px">山札の上から <span id="medicine-bonus-count">3</span> 枚を公開。1枚選んで食べます。残りは山札の下へ。</p>
+    <div id="medicine-bonus-cards" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:12px"></div>
   </div>
 </div>
 
@@ -397,8 +406,8 @@ function cardHtml(card, big = false) {
     cook_card: '加熱用牡蠣を食べる時に使用（+30点に）',
     muriji:    '相手に拒否させない！有無を言わさず食べさせる',
     knife:     '差し出された牡蠣の正体を暴く',
-    gout:      'ゲーム終了時 -30点（秘密）',
-    medicine:  '誰かの痛風カードを1枚無効化'
+    gout:      '公開して前に置く。痛風中は牡蠣を食べられない',
+    medicine:  '自分/他人の痛風を1枚治す。他人の場合は牡蠣3枚から1枚食べられる！'
   };
   return `<div class="card ${card.cls}${big?' big':''}">
     <span class="card-emoji">${card.emoji}</span>
@@ -460,14 +469,14 @@ function startGame() {
     oysterDeck:oyster, specialDeck:special, activeCard:null,
     salesPitch:'', gameLog:[], eatEaterIdx:null,
     forcedAccept:false, usedMuriji:false, knifeRevealed:false,
-    playerCount:names.length
+    playerCount:names.length, medicineEating:false, medicineBonusCards:[]
   };
   for (const name of names) {
-    S.players.push({ name, score:0, hand:[] });
-    // Deal 1 starting card silently (secret)
-    if (S.specialDeck.length > 0) {
-      S.players[S.players.length-1].hand.push(S.specialDeck.pop());
-    }
+    S.players.push({ name, score:0, hand:[], fieldGout:0 });
+  }
+  // Deal 1 starting card each (gout auto-plays to field if drawn)
+  for (let idx = 0; idx < S.players.length; idx++) {
+    drawSpecialTo(idx);
   }
   renderToast();
   showScreen('toast');
@@ -492,9 +501,10 @@ function doKanpai() {
 
 // ===== SCORE BAR =====
 function scoreBarHtml() {
-  return S.players.map((p, i) =>
-    `<span class="score-chip${i===S.currentIdx?' current':''}">${p.name}：${p.score}点</span>`
-  ).join('');
+  return S.players.map((p, i) => {
+    const goutBadge = p.fieldGout > 0 ? ` 🦶×${p.fieldGout}` : '';
+    return `<span class="score-chip${i===S.currentIdx?' current':''}">${p.name}：${p.score}点${goutBadge}</span>`;
+  }).join('');
 }
 
 // ===== PLAY PHASE =====
@@ -521,7 +531,7 @@ function renderPlay() {
       } else if (card.id === 'knife') {
         btnLabel = '（受け取る時に使用）';
       } else if (card.id === 'gout') {
-        btnLabel = '⚠ ゲーム終了時 -30点';
+        btnLabel = '（自動でフィールドに置かれます）';
       }
       return `<div style="text-align:center">
         ${cardHtml(card)}
@@ -542,11 +552,30 @@ function renderPlay() {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
+// Draw 1 special card to player[idx]. Gout auto-plays to field (public).
+function drawSpecialTo(idx) {
+  if (S.specialDeck.length === 0) return null;
+  const p = S.players[idx];
+  const card = S.specialDeck.pop();
+  if (card.id === 'gout') {
+    p.fieldGout++;
+    addLog(`🦶 ${p.name} が痛風カードを引きました！公開して前に置きます（痛風×${p.fieldGout}）`);
+    return card;
+  }
+  if (p.hand.length < 2) {
+    p.hand.push(card);
+    return card;
+  }
+  // Hand is full (safety) — put back
+  S.specialDeck.push(card);
+  return null;
+}
+
 function replenishCard() {
   const p = S.players[S.currentIdx];
   if (p.hand.length >= 2 || S.specialDeck.length === 0) return;
-  p.hand.push(S.specialDeck.pop());
-  addLog(`🃏 ${p.name} がお酒カードを補充しました`);
+  const drawn = drawSpecialTo(S.currentIdx);
+  if (drawn && drawn.id !== 'gout') addLog(`🃏 ${p.name} がお酒カードを補充しました`);
   renderPlay();
 }
 
@@ -564,9 +593,10 @@ function openMedicineModal() {
     b.className = 'btn btn-teal';
     b.style.marginBottom = '8px';
     const isSelf = (i === S.currentIdx);
+    const goutInfo = p.fieldGout > 0 ? ` 🦶×${p.fieldGout}` : ' (痛風なし)';
     b.innerHTML = isSelf
-      ? `👤 自分（${p.name}）の痛風を解除`
-      : `🤝 ${p.name} の痛風を解除 → 自分に <b>+30点</b>`;
+      ? `👤 自分（${p.name}）の痛風を解除${goutInfo}`
+      : `🤝 ${p.name}${goutInfo} の痛風を解除 → 牡蠣3枚から1枚食べる`;
     b.onclick = () => useMedicine(i);
     targets.appendChild(b);
   });
@@ -584,29 +614,55 @@ function useMedicine(targetIdx) {
   const isSelf = (targetIdx === S.currentIdx);
   user.hand.splice(S._medicineCardIdx, 1);
 
-  const goutIdx = target.hand.findIndex(c => c.id === 'gout');
-  if (goutIdx !== -1) {
-    target.hand.splice(goutIdx, 1);
+  if (target.fieldGout > 0) {
+    target.fieldGout--;
     if (isSelf) {
-      addLog(`💊 ${user.name} が自分に尿酸排泄促進薬を使用！自分の痛風1枚を解除（点数変動なし）`);
+      addLog(`💊 ${user.name} が自分に尿酸排泄促進薬を使用！痛風1枚を解除（残り：${target.fieldGout}枚）`);
     } else {
-      user.score += 30;
-      addLog(`💊 ${user.name} が尿酸排泄促進薬を使用！${target.name} の痛風1枚を解除 → ${user.name} に +30点（徳ポイント）（合計：${user.score}点）`);
+      addLog(`💊 ${user.name} が ${target.name} の痛風を治しました！（残り：${target.fieldGout}枚）お礼として牡蠣山札から3枚引けます！`);
+      openMedicineBonusModal();
+      return; // wait for bonus oyster selection
     }
   } else {
-    if (isSelf) {
-      addLog(`💊 ${user.name} が自分に薬を使ったが…そもそも痛風カードがなかった！効果なし`);
-    } else {
-      addLog(`💊 ${user.name} が ${target.name} に薬を使ったが…痛風カードがなかった！😱 痛風詐欺！効果なし・徳ポイントなし`);
-    }
+    addLog(`💊 ${user.name} が薬を使ったが…${target.name} は痛風ではなかった！効果なし`);
   }
 
-  // Draw replacement if under 2
-  if (user.hand.length < 2 && S.specialDeck.length > 0) {
-    user.hand.push(S.specialDeck.pop());
-    addLog(`🃏 ${user.name} がお酒カードを補充しました`);
-  }
   renderPlay();
+}
+
+function openMedicineBonusModal() {
+  S.medicineBonusCards = [];
+  for (let i = 0; i < 3 && S.oysterDeck.length > 0; i++) {
+    S.medicineBonusCards.push(S.oysterDeck.pop());
+  }
+  if (S.medicineBonusCards.length === 0) {
+    addLog(`🦪 牡蠣山札が空のため、お礼の牡蠣はありません`);
+    renderPlay();
+    return;
+  }
+  document.getElementById('medicine-bonus-count').textContent = S.medicineBonusCards.length;
+  document.getElementById('medicine-bonus-cards').innerHTML = S.medicineBonusCards.map((card, i) =>
+    `<div style="text-align:center">
+      ${cardHtml(card)}
+      <button class="btn btn-primary btn-sm mt8" onclick="selectMedicineBonusCard(${i})">これを食べる</button>
+    </div>`
+  ).join('');
+  document.getElementById('modal-medicine-bonus').classList.add('open');
+}
+
+function selectMedicineBonusCard(idx) {
+  document.getElementById('modal-medicine-bonus').classList.remove('open');
+  const chosen = S.medicineBonusCards[idx];
+  // Return unchosen cards to deck bottom
+  S.medicineBonusCards.forEach((c, i) => {
+    if (i !== idx) S.oysterDeck.unshift(c);
+  });
+  addLog(`🦪 ${S.players[S.currentIdx].name} がお礼の牡蠣（${chosen.label}）を食べます！`);
+  S.activeCard = chosen;
+  S.eatEaterIdx = S.currentIdx;
+  S.medicineEating = true;
+  S.knifeRevealed = true; // card already revealed
+  renderEat(); showScreen('eat');
 }
 
 // ===== DRAW OYSTER =====
@@ -670,10 +726,10 @@ function confirmGive() {
       p.hand.splice(mi, 1);
       S.forcedAccept = true;
       addLog(`😤 ${p.name} が無理強いカードを使用！${S.players[S.targetIdx].name} は拒否できない！`);
-      // Draw replacement
+      // Draw replacement (gout auto-plays to field)
       if (p.hand.length < 2 && S.specialDeck.length > 0) {
-        p.hand.push(S.specialDeck.pop());
-        addLog(`🃏 ${p.name} がお酒カードを補充しました`);
+        const drawn = drawSpecialTo(S.currentIdx);
+        if (drawn && drawn.id !== 'gout') addLog(`🃏 ${p.name} がお酒カードを補充しました`);
       }
     }
   }
@@ -739,10 +795,10 @@ function useKnife() {
   target.hand.splice(ki, 1);
   S.knifeRevealed = true;
   addLog(`🔪 ${target.name} がオイスターナイフを使用！牡蠣の正体：${S.activeCard.label}`);
-  // Draw replacement
+  // Draw replacement (gout auto-plays to field)
   if (target.hand.length < 2 && S.specialDeck.length > 0) {
-    target.hand.push(S.specialDeck.pop());
-    addLog(`🃏 ${target.name} がお酒カードを1枚補充しました`);
+    const drawn = drawSpecialTo(S.targetIdx);
+    if (drawn && drawn.id !== 'gout') addLog(`🃏 ${target.name} がお酒カードを1枚補充しました`);
   }
   renderRespond();
 }
@@ -766,11 +822,20 @@ function respondRefuse() {
 function renderEat() {
   const eater = S.players[S.eatEaterIdx];
   const card = S.activeCard;
-  document.getElementById('eat-heading').textContent = `${eater.name} が食べます！`;
+  const hasGout = eater.fieldGout > 0;
+  document.getElementById('eat-heading').textContent =
+    hasGout ? `🦶 ${eater.name} は痛風中！` : `${eater.name} が食べます！`;
   document.getElementById('eat-card-display').innerHTML = cardHtml(card, true);
 
   const choiceDiv = document.getElementById('eat-cook-choice');
   document.getElementById('eat-result').style.display = 'none';
+
+  // Gout prevents eating — skip cook choice
+  if (hasGout) {
+    choiceDiv.style.display = 'none';
+    resolveEat(false);
+    return;
+  }
 
   if (card.id === 'cook_oys' && eater.hand.some(c => c.id === 'cook_card')) {
     choiceDiv.style.display = 'block';
@@ -788,17 +853,29 @@ function resolveEat(useCook) {
   const card = S.activeCard;
   let delta = 0, msg = '', drawnCard = null;
 
+  // Gout: can't eat — discard oyster
+  if (eater.fieldGout > 0) {
+    msg = `🦶 痛風のため食べられない！（${card.label} を破棄）`;
+    addLog(`🦶 ${eater.name} は痛風中のため、${card.label} を食べられません。牡蠣を破棄します。`);
+    const deltaEl = document.getElementById('eat-delta');
+    deltaEl.textContent = '±0点';
+    deltaEl.className = 'delta-display';
+    document.getElementById('eat-result-msg').textContent = msg;
+    document.getElementById('eat-draw-special').style.display = 'none';
+    document.getElementById('eat-result').style.display = 'block';
+    S.activeCard = null;
+    return;
+  }
+
   if (card.id === 'raw') {
     delta = 10; msg = '生食用牡蠣を食べました！';
   } else if (card.id === 'cook_oys') {
     if (useCook) {
       delta = 30; msg = '加熱調理カードを使って安全に食べました！';
       eater.hand.splice(eater.hand.findIndex(c => c.id === 'cook_card'), 1);
-      // Draw replacement
-      if (eater.hand.length < 2 && S.specialDeck.length > 0) {
-        drawnCard = S.specialDeck.pop();
-        eater.hand.push(drawnCard);
-      }
+      // Draw replacement (gout auto-plays to field if drawn)
+      const drawn = drawSpecialTo(S.eatEaterIdx);
+      if (drawn && drawn.id !== 'gout') drawnCard = drawn;
     } else {
       delta = -10; msg = '加熱調理カードなしで食べてしまいました…';
     }
@@ -823,6 +900,14 @@ function resolveEat(useCook) {
 }
 
 function nextTurn() {
+  if (S.medicineEating) {
+    // Medicine bonus eat done — same player's turn continues
+    S.medicineEating = false;
+    S.eatEaterIdx = null; S.activeCard = null;
+    if (S.oysterDeck.length === 0) { endGame(); return; }
+    renderPlay(); showScreen('play');
+    return;
+  }
   if (S.oysterDeck.length === 0) { endGame(); return; }
   S.currentIdx = (S.currentIdx + 1) % S.players.length;
   S.targetIdx = null; S.salesPitch = ''; S.eatEaterIdx = null;
@@ -834,10 +919,8 @@ function nextTurn() {
 function endGame() {
   addLog('--- ゲーム終了！最終精算 ---');
   for (const p of S.players) {
-    const goutCount = p.hand.filter(c => c.id === 'gout').length;
-    if (goutCount > 0) {
-      p.score += goutCount * -30;
-      addLog(`🦶 ${p.name} 痛風カード${goutCount}枚 → -${goutCount*30}点（合計：${p.score}点）`);
+    if (p.fieldGout > 0) {
+      addLog(`🦶 ${p.name} は痛風×${p.fieldGout} でゲーム終了（得点への影響なし）`);
     }
   }
   renderResult(); showScreen('result');
@@ -850,8 +933,8 @@ function renderResult() {
   document.getElementById('result-list').innerHTML = sorted.map((p, rank) => {
     const isWinner = p.score === maxScore;
     const rankEmoji = rank===0?'👑':rank===1?'🥈':rank===2?'🥉':`${rank+1}位`;
-    const goutNote = p.hand.filter(c=>c.id==='gout').length > 0
-      ? `<span style="color:#f1948a;font-size:0.8rem">🦶×${p.hand.filter(c=>c.id==='gout').length}</span>` : '';
+    const goutNote = p.fieldGout > 0
+      ? `<span style="color:#f1948a;font-size:0.8rem">🦶×${p.fieldGout}</span>` : '';
     return `<div class="result-row${isWinner?' winner':''}">
       <span class="result-rank">${rankEmoji}</span>
       <span class="result-name">${p.name} ${goutNote}</span>
@@ -866,13 +949,20 @@ function renderResult() {
 // ===== GOUT APPEAL =====
 function goutAppeal() {
   const p = S.players[S.currentIdx];
-  const msgs = [
-    `「痛風かもしれません…💊 薬を持っている方、ぜひお願いします！」`,
-    `「最近、足が痛くて…誰か薬を譲ってもらえませんか？🙏」`,
-    `「痛風つらい！薬持ってる人いませんか〜？」`,
-  ];
-  const msg = msgs[Math.floor(Math.random() * msgs.length)];
-  addLog(`🦶 ${p.name}：${msg}`);
+  if (p.fieldGout > 0) {
+    const msgs = [
+      `「痛風です！💊 薬を持っている方、ぜひお願いします！」`,
+      `「足が痛い…誰か薬を譲ってもらえませんか？🙏」`,
+      `「痛風つらい！薬持ってる人いませんか〜？」`,
+    ];
+    addLog(`🦶 ${p.name}：${msgs[Math.floor(Math.random() * msgs.length)]}`);
+  } else {
+    const msgs = [
+      `「今は元気ですが、痛風が心配です〜😰」`,
+      `「予防のために薬が欲しい…！💊」`,
+    ];
+    addLog(`💬 ${p.name}：${msgs[Math.floor(Math.random() * msgs.length)]}`);
+  }
   renderPlay();
 }
 
@@ -892,7 +982,7 @@ function resetGame() {
   S = { phase:'setup', players:[], currentIdx:0, targetIdx:null,
     oysterDeck:[], specialDeck:[], activeCard:null, salesPitch:'',
     gameLog:[], eatEaterIdx:null, forcedAccept:false, usedMuriji:false,
-    knifeRevealed:false, playerCount:3 };
+    knifeRevealed:false, playerCount:3, medicineEating:false, medicineBonusCards:[] };
   showScreen('setup'); initSetup();
 }
 
